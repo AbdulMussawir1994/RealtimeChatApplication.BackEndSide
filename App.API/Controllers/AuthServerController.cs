@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using App.Core.DTOs;
+﻿using App.Core.DTOs;
 using App.Core.Jwt;
 using App.Core.Result;
 using App.Logic.Services;
@@ -20,7 +19,10 @@ namespace App.API.Controllers
 
         [HttpPost("login")]
         [ProducesResponseType(typeof(Result<ResultTokenMessage>), 200)]
-        [ProducesResponseType(typeof(Result<ResultTokenMessage>), 401)]       
+        [ProducesResponseType(typeof(Result<ResultTokenMessage>), 401)]
+
+        [ProducesResponseType(typeof(Result<ResultTokenMessage>), 400)]
+        [ProducesResponseType(typeof(Result<ResultTokenMessage>), 500)]
         public async Task<IActionResult> Login(LoginDto model)
         {
             var result = await tokenService.LoginAsync(model.UserNumber, model.Password);

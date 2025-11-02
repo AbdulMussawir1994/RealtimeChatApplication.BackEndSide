@@ -43,9 +43,9 @@ namespace App.API
             builder.Services.AddControllers();
 
             builder.Services.AddFluentValidationAutoValidation();
-            
+
             builder.Services.AddFluentValidationClientsideAdapters();
-            
+
             builder.Services.AddValidatorsFromAssemblyContaining<UserCreateRequestValidator>();
 
             builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -131,12 +131,12 @@ namespace App.API
             builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
             //HttpOnly Cookie için gerekli olan HttpContextAccessor servisini ekliyoruz
-            builder.Services.AddHttpContextAccessor();           
+            builder.Services.AddHttpContextAccessor();
 
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("AllowMyLocalHost", policy =>
-                    policy.WithOrigins("http://localhost:4200")
+                    policy.WithOrigins("http://localhost:4200", "http://localhost:11396")
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials()

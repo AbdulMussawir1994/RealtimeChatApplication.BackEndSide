@@ -41,7 +41,7 @@ namespace App.Logic.Services
         {
             var user = await _userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == userNumber);
 
-            if (user == null || !await _userManager.CheckPasswordAsync(user, password))
+            if (user is null || !await _userManager.CheckPasswordAsync(user, password))
             {
 
                 _logger.LogInformation("Failed login attempt for phone number {userNumber}, from IP {ipAddress} at {Time}",

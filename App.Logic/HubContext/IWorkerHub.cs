@@ -26,5 +26,7 @@ namespace App.Logic.HubContext
         /// <param name="receiverNumber"></param>
         /// <returns></returns>
         Task UserTyping(string senderNumber);
+
+        Task ReceiveInactiveNotification(string message, ChatMessageDto data); // <-- Add this
     }
 }

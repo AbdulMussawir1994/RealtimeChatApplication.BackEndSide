@@ -1,8 +1,6 @@
 ﻿using App.Core.DTOs;
 using App.Core.Entities;
-using App.Core.Interface.RabbitMQ;
 using App.Core.Result;
-using App.Infrastructure.RabbitMQ;
 using App.Logic.HubContext;
 using App.Logic.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -14,7 +12,7 @@ namespace App.API.Controllers
     [Route("api/chat")]
     [ApiController]
     public class ChatController : ControllerBase
-    {     
+    {
         private readonly MessageService _messageService;
         private readonly ConversationService conversationService;
         private readonly FriendService friendService;
@@ -42,7 +40,7 @@ namespace App.API.Controllers
             if (!messageBox.IsSuccess || messageBox.Data == null)
             {
                 return StatusCode(messageBox.StatusCode, messageBox);
-            }            
+            }
 
             return StatusCode(messageBox.StatusCode, messageBox.Data);
         }
@@ -55,7 +53,7 @@ namespace App.API.Controllers
         public async Task<IActionResult> GetConversation(string targetNumber)
         {
             Result<List<MessageBoxDto>> conversation = await conversationService.GetConversationAsync(targetNumber);
-            
+
             return StatusCode(conversation.StatusCode, conversation);
         }
 

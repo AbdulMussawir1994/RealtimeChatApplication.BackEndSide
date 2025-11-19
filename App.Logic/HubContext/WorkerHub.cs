@@ -1,10 +1,10 @@
 ﻿using App.Core.DTOs;
-using App.Core.Entities;
 using App.Core.Interface;
 using App.Logic.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Security.Claims;
 
 namespace App.Logic.HubContext
@@ -21,7 +21,11 @@ namespace App.Logic.HubContext
 
         private readonly ILogger<WorkerHub> logger;
 
-        private static readonly TimeSpan InactiveThreshold = TimeSpan.FromMinutes(5); // Customize as needed
+        private static readonly TimeSpan InactiveThreshold = TimeSpan.FromMinutes(5);
+
+        // High-performance in-memory user tracking
+        private static readonly ConcurrentDictionary<string, UserConnectionInfoDto> UserConnections =
+            new ConcurrentDictionary<string, UserConnectionInfoDto>();
 
         public WorkerHub(IUnitOfWork unitOfWork, ConversationService conversationService, ICurrentUserService currentUserService, ILogger<WorkerHub> logger)
         {
@@ -33,6 +37,19 @@ namespace App.Logic.HubContext
 
         public async Task SendMessageFromWorker(ChatMessageDto dto)
         {
+
+            // 1. Check if receiver is inactive
+            if (IsUserInactive(dto.ReceiverNumber))
+            {
+                await Clients.User(dto.SenderNumber)
+                    .ReceiveInactiveNotification(
+                        $"User {dto.ReceiverNumber} is inactive.",
+                        dto
+                    );
+
+                return;
+            }
+
             await Clients.User(dto.SenderNumber).ReceiveMessageAsync(dto);
 
             await Clients.User(dto.ReceiverNumber).ReceiveMessageAsync(dto);
@@ -43,8 +60,6 @@ namespace App.Logic.HubContext
             await Clients.User(dto.ReceiverNumber)
                 .UpdateNotifyClientMessageList(dto.SenderNumber, dto.ReceiverNumber);
 
-            // Check if receiver is inactive and send notification if needed
-            await NotifyIfUserInactive(dto.ReceiverNumber, dto);
         }
 
         public async Task UpdateMessageList(string senderNumber, string receiverNumber)
@@ -63,65 +78,81 @@ namespace App.Logic.HubContext
             }
         }
 
+        // ─────────────────────────────────────────────
+        // USER CONNECTED
+        // ─────────────────────────────────────────────
         public override async Task OnConnectedAsync()
         {
+            var phone = Context.User?.FindFirst(ClaimTypes.MobilePhone)?.Value;
+
+            if (!string.IsNullOrEmpty(phone))
+            {
+                UserConnections[phone] = new UserConnectionInfoDto
+                {
+                    ConnectionId = Context.ConnectionId,
+                    LastSeen = DateTime.UtcNow,
+                    IsActive = true
+                };
+
+                logger.LogInformation($"User Connected: {phone}");
+            }
 
             await base.OnConnectedAsync();
         }
 
+        // ─────────────────────────────────────────────
+        // USER DISCONNECTED
+        // ─────────────────────────────────────────────
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            var phone = Context.User?.FindFirst(ClaimTypes.MobilePhone)?.Value;
+
+            if (!string.IsNullOrEmpty(phone))
+            {
+                if (UserConnections.TryGetValue(phone, out var info))
+                {
+                    info.IsActive = false;
+                    info.LastSeen = DateTime.UtcNow;
+                }
+
+                logger.LogInformation($"User Disconnected: {phone}");
+            }
+
             await base.OnDisconnectedAsync(exception);
         }
 
-        private async Task NotifyIfUserInactive(string userNumber, ChatMessageDto message)
+        // ─────────────────────────────────────────────
+        // ADMIN DEACTIVATES A USER (Real-Time Notify)
+        // ─────────────────────────────────────────────
+        public async Task NotifyInactiveByAdmin(string userNumber)
         {
-            // Get user info (e.g., Admin)
-            var result = await conversationService.GetAllConversationsAsync();
-            if (!result.IsSuccess || result.Data is null)
-                return;
+            // Update DB (no UnitOfWork)
+            await userService.DeactivateUserAsync(userNumber);
 
-            // Find the user by number
-            var user = result.Data
-                .SelectMany(mb => new[] { mb.SenderNumber, mb.ReceiverNumber })
-                .Distinct()
-                .FirstOrDefault(n => n == userNumber);
-
-            if (user is null)
-                return;
-
-            // You may want to use a UserManager or repository to get AppUser by number
-            // For demonstration, let's assume you have a method to get AppUser by number
-            var appUser = await GetAppUserByNumberAsync(userNumber);
-            if (appUser == null)
-                return;
-
-            // Check inactivity
-            if (!appUser.LastSeen.HasValue || DateTime.UtcNow - appUser.LastSeen.Value > InactiveThreshold)
+            // Notify if connected
+            if (UserConnections.TryGetValue(userNumber, out var info))
             {
-                // Send notification (customize as needed)
-                await SendInactiveUserNotification(userNumber, message);
+                await Clients.Client(info.ConnectionId)
+                    .ReceiveInactiveNotification("Your account has been deactivated by the admin.", null);
             }
         }
 
-        // Example: Get AppUser by phone number (implement as needed)
-        private async Task<AppUser?> GetAppUserByNumberAsync(string userNumber)
+        // ─────────────────────────────────────────────
+        // CHECK USER INACTIVE
+        // High-Performance: Pure Memory (No DB)
+        // ─────────────────────────────────────────────
+        private bool IsUserInactive(string phone)
         {
-            // Replace with your actual user lookup logic
-            // For example, via UserManager or repository
-            // Example:
-            // return await userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == userNumber);
-            return null;
-        }
+            if (!UserConnections.TryGetValue(phone, out var info))
+                return true; // not connected → inactive
 
-        // Example: Send notification to inactive user (customize as needed)
-        private async Task SendInactiveUserNotification(string userNumber, ChatMessageDto message)
-        {
-            await Clients.User(userNumber)
-                .ReceiveInactiveNotification(
-                    $"You have a new message from {message.SenderNumber} while you were inactive.",
-                    message
-                );
+            if (!info.IsActive)
+                return true;
+
+            if (DateTime.UtcNow - info.LastSeen > InactiveThreshold)
+                return true;
+
+            return false;
         }
     }
 }

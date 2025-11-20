@@ -9,10 +9,7 @@ public class ConnectionManager : IConnectionManager
 
     public void AddConnection(string userId, string connectionId)
     {
-        _connections.AddOrUpdate(
-            userId,
-            _ => new HashSet<string> { connectionId },
-            (_, set) =>
+        _connections.AddOrUpdate(userId, _ => new HashSet<string> { connectionId }, (_, set) =>
             {
                 lock (set) set.Add(connectionId);
                 return set;

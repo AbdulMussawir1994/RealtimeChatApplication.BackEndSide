@@ -1,4 +1,5 @@
 ﻿using App.Core.Interface;
+using App.Core.Interface.SemaphoreSlim;
 using App.Infrastructure.Cache;
 using App.Logic.BackgroundJobs;
 using App.Logic.Services;
@@ -26,6 +27,8 @@ namespace App.Logic.Extension
             services.AddScoped<FriendService>();
 
             services.AddScoped<IRemovedExpiredRefreshTokenService, RemovedExpiredRefreshTokenService>();
+
+            services.AddSingleton<IReportService, ReportService>();
 
             services.AddScoped<IConnectionManager, ConnectionManager>();
 

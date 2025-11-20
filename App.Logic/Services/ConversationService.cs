@@ -2,7 +2,7 @@
 using App.Core.Entities;
 using App.Core.Interface;
 using App.Core.Result;
-using Microsoft.AspNetCore.Http;
+using App.Persistance.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,12 +13,14 @@ namespace App.Logic.Services
         private readonly UserManager<AppUser> _userManager;
         private readonly IRepository<Message> repository;
         private readonly ICurrentUserService currentUser;
+        private readonly AppDbContext _db;
 
-        public ConversationService(UserManager<AppUser> userManager, IRepository<Message> repository, ICurrentUserService currentUser)
+        public ConversationService(UserManager<AppUser> userManager, IRepository<Message> repository, ICurrentUserService currentUser, AppDbContext db)
         {
             _userManager = userManager;
             this.repository = repository;
             this.currentUser = currentUser;
+            _db = db;
         }
 
         public async Task<Result<List<MessageBoxDto>>> GetConversationAsync(string? targetNumber)
@@ -53,6 +55,8 @@ namespace App.Logic.Services
                 .Include(m => m.Receiver)
                 .OrderBy(m => m.SentAt)
                 .ToListAsync();
+
+            var updateSeenResult = await UpdateUserSeenAsync(targetNumber);
 
             var conversationDtos = messages.Select(m => new MessageBoxDto
             {
@@ -93,6 +97,20 @@ namespace App.Logic.Services
             }).ToList();
 
             return Result<List<MessageBoxDto>>.Success(dtos, 200);
+        }
+
+        private async Task<Result<bool>> UpdateUserSeenAsync(string userNumber)
+        {
+            var user = await _userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == userNumber);
+
+            if (user is null)
+            {
+                return Result<bool>.Failure("User not found", 404); ;
+            }
+
+            user.LastSeen = DateTime.UtcNow;
+            var result = await _userManager.UpdateAsync(user);
+            return Result<bool>.Success(result.Succeeded, 200);
         }
 
     }

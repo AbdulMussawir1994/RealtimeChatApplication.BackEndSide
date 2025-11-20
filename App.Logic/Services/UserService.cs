@@ -3,8 +3,10 @@ using App.Core.Entities;
 using App.Core.Interface;
 using App.Core.Result;
 using App.Infrastructure.Cache;
+using App.Logic.HubContext;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -19,6 +21,8 @@ namespace App.Logic.Services
         private readonly MemoryCacheService memoryCacheService;
         private readonly ILogger<UserService> logger;
         private readonly IHttpContextAccessor httpContextAccessor;
+        private readonly IHubContext<WorkerHub, IWorkerHub> _hub;
+        private readonly IConnectionManager _connectionManager;
 
         public UserService(
             UserManager<AppUser> userManager,
@@ -27,7 +31,10 @@ namespace App.Logic.Services
             ICurrentUserService currentUserService,
             MemoryCacheService memoryCacheService,
             ILogger<UserService> logger,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            IHubContext<WorkerHub, IWorkerHub> hub,
+            IConnectionManager connectionManager
+            )
         {
             this.userManager = userManager;
             _unitOfWork = unitOfWork;
@@ -36,6 +43,8 @@ namespace App.Logic.Services
             this.memoryCacheService = memoryCacheService;
             this.logger = logger;
             this.httpContextAccessor = httpContextAccessor;
+            this._connectionManager = connectionManager;
+            this._hub = hub;
         }
 
         /// <summary>
@@ -45,12 +54,12 @@ namespace App.Logic.Services
         {
             List<AppUser> users = await userManager.Users.ToListAsync();
 
-            if(users == null)
+            if (users == null)
             {
                 return Result<List<AppUser>>.Failure("No users found", 404);
             }
 
-            if(users.Count < 1)
+            if (users.Count < 1)
             {
                 return Result<List<AppUser>>.Failure("No users found", 404);
             }
@@ -145,14 +154,14 @@ namespace App.Logic.Services
         {
             AppUser? user = await userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == userNumber);
 
-            if(user == null)
+            if (user == null)
             {
                 return Result<UserDto>.Failure("User not found", 404);
             }
 
             UserDto resultUserDto = new UserDto
             {
-                Id= user?.Id,
+                Id = user?.Id,
                 Email = user?.Email,
                 UserName = user?.UserName,
                 PhoneNumber = user?.PhoneNumber
@@ -221,6 +230,32 @@ namespace App.Logic.Services
             }
 
             return Result<AppUser>.Success(user, 200);
+        }
+
+        public async Task<Result<bool>> DeactivateUserAsync(string number)
+        {
+            await DeactivateUser(number);
+
+            var connections = _connectionManager.GetConnections(number);
+
+            foreach (var connection in connections)
+                await _hub.Clients.Client(connection)
+                    .ReceiveInactiveNotification("Your account has been deactivated by admin.", null);
+
+            return Result<bool>.Success(true, 200);
+        }
+
+        private async Task<Result<bool>> DeactivateUser(string userNumber)
+        {
+            var user = await userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == userNumber);
+
+            if (user is null)
+            {
+                return Result<bool>.Failure("User not found", 404); ;
+            }
+            user.IsActive = false;
+            var result = await userManager.UpdateAsync(user);
+            return Result<bool>.Success(result.Succeeded, 200);
         }
     }
 }

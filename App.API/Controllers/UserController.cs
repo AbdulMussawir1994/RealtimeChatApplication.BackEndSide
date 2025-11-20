@@ -83,5 +83,15 @@ namespace App.API.Controllers
 
             return StatusCode(newUser.StatusCode, newUser);
         }
+
+        [HttpPost("DeactivateUser")]
+        [ProducesResponseType(typeof(Result<IdentityResult>), 201)]
+        [ProducesResponseType(typeof(Result<IdentityResult>), 409)]
+        [ProducesResponseType(typeof(Result<IdentityResult>), 400)]
+        public async Task<ActionResult> DeactivateUser(string phoneNumber)
+        {
+            var result = await userService.DeactivateUserAsync(phoneNumber);
+            return StatusCode(result.StatusCode, result);
+        }
     }
 }

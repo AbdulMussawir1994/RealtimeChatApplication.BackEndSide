@@ -27,6 +27,8 @@ namespace App.Logic.Extension
 
             services.AddScoped<IRemovedExpiredRefreshTokenService, RemovedExpiredRefreshTokenService>();
 
+            services.AddScoped<IConnectionManager, ConnectionManager>();
+
             services.AddHostedService<ExpiredRefreshTokenCleanerService>();
 
             services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(builder.GetConnectionString("RedisConnection")!));

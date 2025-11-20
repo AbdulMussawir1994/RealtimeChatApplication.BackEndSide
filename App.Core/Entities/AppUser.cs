@@ -7,6 +7,7 @@ namespace App.Core.Entities
         public string? DisplayName { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public DateTime? LastSeen { get; set; }
+        public bool IsActive { get; set; } = true;
 
         // Navigation properties
         public List<Message>? SentMessages { get; set; }
